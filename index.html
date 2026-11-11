@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#11191b">
+  <title>월하검 — 달빛 아래의 결투</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header class="topbar"><a class="brand" href="./"><span class="brand-mark">月</span><span>월하검 <small>MOONLIT BLADE</small></span></a><button id="sound" class="quiet" aria-label="효과음 켜기">소리 OFF</button></header>
+    <section class="heading"><div><span class="eyebrow">THE ENDLESS DUEL</span><h1>달빛 아래,<br class="mobile-break"> 마지막 한 자루.</h1><p>다가오는 검을 읽고, 빈틈을 베어라.</p></div><div class="record"><span>최고 기록</span><strong id="best">00</strong><small>WAVES</small></div></section>
+    <section class="arena-shell" aria-label="칼싸움 게임">
+      <div class="hud"><div class="vital"><div class="hud-label"><span>검객 <em>YOU</em></span><b id="hpText">100 / 100</b></div><div class="bar"><i id="hp"></i></div><div class="stamina"><i id="stamina"></i></div></div><div class="wave"><span>WAVE</span><strong id="wave">01</strong></div><div class="score"><span>처치</span><strong id="kills">0</strong><span class="score-divider">/</span><span id="enemyCount">0 남음</span></div></div>
+      <div class="combo-hud" id="comboHud" data-power="1"><span>연속 명중 <b id="comboCount">0</b></span><strong id="bladePower">공격력 ×1</strong></div>
+      <div class="ranged-status" id="rangedStatus">L 참격 준비</div>
+      <div class="area-status" id="areaStatus">좌클릭 꾹 · 월광 폭발</div>
+      <canvas id="game" tabindex="0" aria-label="이동 WASD 또는 방향키, 공격 J 또는 짧은 좌클릭, 좌클릭 0.8초 누르기 월광 폭발, 원거리 참격 L, 방어 K, 대시 스페이스, 일시정지 P"></canvas>
+      <div class="arena-caption"><span><i></i> 대나무 숲 · 자정</span><span id="status">당신의 이야기가 시작됩니다</span></div>
+      <div class="overlay" id="overlay"><div class="intro-emblem">斬</div><span class="eyebrow" id="overlayTag">A DUEL UNDER THE MOON</span><h2 id="overlayTitle">고요를 가르는 검</h2><p id="overlayDescription">검을 들고 끝없이 찾아오는 적과 맞서세요.<br>정확한 방어와 한 번의 대시가 승부를 바꿉니다.</p><button class="start" id="start">검을 들다 <span>↗</span></button><small id="overlayHint">키보드와 마우스 · 터치 조작 지원</small></div>
+      <div id="announcement" aria-live="polite"></div>
+      <div class="touch-controls"><div class="dpad"><button data-control="up" aria-label="위로 이동">↑</button><button data-control="left" aria-label="왼쪽 이동">←</button><button data-control="down" aria-label="아래로 이동">↓</button><button data-control="right" aria-label="오른쪽 이동">→</button></div><div class="touch-actions"><button data-control="guard">방어</button><button data-control="ranged" class="ranged-button">참격</button><button data-control="dash">대시</button><button data-control="attack" class="attack-button">베기</button></div></div>
+    </section>
+    <section class="guide"><div class="guide-title"><span>검술의 기본</span><small>HOW TO PLAY</small></div><div class="key-guide"><div><kbd>W A S D</kbd><span>이동 <small>또는 방향키</small></span></div><div><kbd>J</kbd><span>베기 <small>또는 클릭</small></span></div><div><kbd>L</kbd><span>원거리 참격 <small>기력 25 · 재사용 1초</small></span></div><div><kbd>K</kbd><span>방어 <small>타이밍 방어로 반격</small></span></div><div><kbd>SPACE</kbd><span>대시 <small>순간 무적</small></span></div><div><kbd>P</kbd><span>일시정지</span></div></div></section>
+    <p class="area-tip"><strong>좌클릭 꾹 · 월광 폭발</strong> 0.8초 동안 누르면 자동 발동! 주변 모든 적에게 피해를 주고 밀쳐냅니다. 기력 45 · 재사용 5초 · 칼 강화 적용. 짧게 클릭하면 일반 베기입니다.</p>
+    <p class="ranged-tip">참격은 바라보는 방향으로 날아가 적을 관통합니다. 마우스 또는 이동으로 조준하세요. 근접 연속 명중으로 얻은 강화가 참격과 광역기에도 적용되며, 두 스킬은 연속 명중 횟수를 바꾸지 않습니다.</p>
+    <footer><span>연속 명중 3회: 금빛 검 · 공격력 ×2 / 6회: 푸른 검 · ×3. 헛치거나 피해를 받으면 초기화됩니다.</span><span>靜中動 · 고요 속의 움직임</span></footer>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>

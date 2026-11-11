@@ -1,0 +1,208 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+
+const nodes = new Map();
+const gradient = { addColorStop() {} };
+const context = new Proxy({}, { get: (_, key) => key.startsWith('create') ? () => gradient : () => {}, set: () => true });
+function node(id) {
+  if (!nodes.has(id)) nodes.set(id, {
+    textContent: '', innerHTML: '', style: {}, width: 1200, height: 600, clientWidth: 1200, clientHeight: 600,
+    classList: { add() {}, remove() {} }, addEventListener() {}, setAttribute() {}, focus() {}, getContext: () => context,
+  });
+  return nodes.get(id);
+}
+const sandbox = {
+  document: { getElementById: node, querySelectorAll: () => [], addEventListener() {} },
+  window: { addEventListener() {} }, localStorage: { getItem: () => null, setItem() {} },
+  ResizeObserver: class { observe() {} }, requestAnimationFrame() {}, devicePixelRatio: 1,
+};
+let source = fs.readFileSync(`${__dirname}/game.js`, 'utf8');
+source = source.replace('resize();requestAnimationFrame(frame);', `globalThis.test = {
+  start, pause, attack, dash, rangedAttack, updateProjectiles, update, enemyHit, draw,
+  beginCharge, releaseCharge, cancelCharge, areaAttack, charge,
+  get player() { return player; }, get enemies() { return enemies; }, get state() { return state; },
+  get wave() { return wave; }, get kills() { return kills; }, get projectiles() { return projectiles; }, keys,
+  setEnemies(value) { enemies = value; }
+};`);
+vm.runInNewContext(source, sandbox);
+const game = sandbox.test;
+game.start();
+assert.equal(game.state, 'playing');
+assert.equal(game.wave, 1);
+assert.equal(game.enemies.length, 4);
+assert.ok(game.enemies.every(e => e.hp === 4 && e.speed >= 61), 'ordinary enemies are tougher and faster');
+game.draw(0.016);
+game.pause();
+assert.equal(game.state, 'paused');
+const x = game.player.x;
+game.keys.add('d'); game.update(0.1);
+assert.equal(game.player.x, x);
+game.start();
+game.keys.add('d'); game.update(0.1); game.keys.clear();
+assert.ok(game.player.x > x);
+game.dash();
+assert.ok(game.player.invuln > 0);
+assert.ok(game.player.stamina < 100);
+game.update(0.2);
+const target = { x: game.player.x + 50, y: game.player.y, hp: 2, maxHp: 2, cool: 10, wind: 0, stun: 0, flash: 0, speed: 50 };
+game.setEnemies([target]);
+game.attack();
+assert.equal(target.hp, 1);
+game.update(0.4); game.attack();
+assert.equal(game.enemies.length, 0);
+assert.equal(game.kills, 1);
+game.update(2.5);
+assert.equal(game.wave, 2);
+game.player.invuln = 0; game.player.guard = true; game.player.guardTime = 0;
+const attacker = { x: game.player.x + 50, y: game.player.y, attackA: Math.PI, hp: 2, heavy: false };
+const hp = game.player.hp;
+game.enemyHit(attacker);
+assert.equal(game.player.hp, hp);
+assert.equal(attacker.hp, 1);
+assert.equal(attacker.stun, 1.4);
+game.player.guard = false; game.player.hp = 1;
+game.enemyHit(attacker);
+assert.equal(game.state, 'over');
+game.start();
+assert.equal(game.player.hp, 100);
+assert.equal(game.wave, 1);
+assert.equal(game.kills, 0);
+assert.equal(game.player.hitStreak, 0);
+const dummy = { x: 0, y: 0, hp: 100, maxHp: 100, cool: 100, wind: 0, stun: 0, flash: 0, speed: 0 };
+function strike(targets = [dummy]) {
+  game.player.cool = 0; game.player.stamina = 100;
+  for (const target of targets) { target.x = game.player.x + 50; target.y = game.player.y; }
+  game.setEnemies(targets);
+  const before = dummy.hp;
+  game.attack();
+  return before - dummy.hp;
+}
+assert.equal(strike(), 1);
+game.attack();
+assert.equal(game.player.hitStreak, 1, 'cooldown input must not break a streak');
+assert.equal(strike(), 1);
+assert.equal(strike(), 2, 'third successful swing is powered immediately');
+assert.equal(node('bladePower').textContent, '공격력 ×2');
+game.draw(0.016);
+assert.equal(strike(), 2);
+assert.equal(strike(), 2);
+assert.equal(strike(), 3, 'sixth successful swing reaches maximum power');
+assert.equal(strike(), 3, 'power is capped at three');
+assert.equal(node('comboCount').textContent, 7);
+game.draw(0.016);
+game.pause(); game.update(10); game.start();
+assert.equal(game.player.hitStreak, 7, 'pause preserves the streak');
+game.dash();
+assert.equal(game.player.hitStreak, 7, 'dash preserves the streak');
+game.player.dash = 0; game.player.invuln = 0;
+const guardTarget = { x: game.player.x + 50, y: game.player.y, attackA: Math.PI, hp: 10, heavy: false };
+game.player.guard = true; game.player.guardTime = 0;
+game.enemyHit(guardTarget);
+assert.equal(game.player.hitStreak, 7, 'successful guard preserves, but does not increase, the streak');
+strike([]);
+assert.equal(game.player.hitStreak, 0, 'a missed swing resets the streak');
+assert.equal(node('bladePower').textContent, '공격력 ×1');
+const secondDummy = { ...dummy };
+strike([dummy, secondDummy]);
+assert.equal(game.player.hitStreak, 1, 'multiple targets count as one successful swing');
+strike(); strike();
+game.player.guard = false;
+game.enemyHit(guardTarget);
+assert.equal(game.player.hitStreak, 0, 'taking damage resets the streak');
+assert.equal(strike(), 1, 'damage returns to normal after reset');
+game.start();
+assert.equal(game.player.hitStreak, 0, 'restart clears sword power');
+game.player.a = 0;
+const rangedTargets = [150, 300].map(offset => ({ ...dummy, x: game.player.x + offset, y: game.player.y, hp: 10 }));
+game.setEnemies(rangedTargets);
+game.rangedAttack();
+assert.equal(game.projectiles.length, 1);
+assert.equal(game.player.stamina, 75);
+assert.equal(game.player.rangedCool, 1);
+game.rangedAttack();
+assert.equal(game.projectiles.length, 1, 'cooldown prevents firing twice');
+game.draw(.016);
+game.pause();
+const projectileX = game.projectiles[0].x;
+game.update(.2);
+assert.equal(game.projectiles[0].x, projectileX, 'pause freezes projectiles');
+game.start();
+game.updateProjectiles(.5);
+assert.ok(rangedTargets.every(e => e.hp === 8), 'a projectile hits multiple targets along its path');
+game.updateProjectiles(.01);
+assert.ok(rangedTargets.every(e => e.hp === 8), 'each projectile damages a target only once');
+assert.equal(game.player.hitStreak, 0, 'ranged hits do not alter the melee combo');
+game.updateProjectiles(1);
+assert.equal(game.projectiles.length, 0, 'projectiles expire');
+game.player.hitStreak = 6;game.player.rangedCool = 0;game.player.cool = 0;game.player.stamina = 100;
+const rangedVictim = { ...dummy, x: game.player.x + 100, y: game.player.y, hp: 6 };
+game.setEnemies([rangedVictim]);
+game.rangedAttack();
+assert.equal(game.projectiles[0].damage, 6, 'sword power boosts ranged damage');
+game.player.hitStreak = 0;
+game.updateProjectiles(.2);
+assert.equal(game.enemies.length, 0);
+assert.equal(game.kills, 1, 'ranged kills are counted; damage is captured at launch');
+game.player.rangedCool = 0;game.player.cool = 0;game.player.stamina = 24;
+game.rangedAttack();
+assert.equal(game.projectiles.length, 1, 'insufficient stamina prevents a new projectile');
+game.start();
+assert.equal(game.projectiles.length, 0, 'restart clears projectiles');
+game.player.guard = false;
+game.enemyHit({ x: game.player.x + 50, y: game.player.y, attackA: Math.PI, heavy: false });
+assert.equal(game.player.hp, 82, 'ordinary enemy damage is increased to 18');
+game.player.invuln = 0;
+game.enemyHit({ x: game.player.x + 50, y: game.player.y, attackA: Math.PI, heavy: true });
+assert.equal(game.player.hp, 54, 'heavy enemy damage is increased to 28');
+game.start();game.setEnemies([]);game.update(2.5);game.setEnemies([]);game.update(2.5);
+assert.equal(game.wave, 3);
+assert.ok(game.enemies.some(e => e.heavy && e.hp === 7), 'heavy enemies have 7 health');
+game.start();
+const areaTarget = (x, y, hp = 20) => ({ ...dummy, x: game.player.x+x, y:game.player.y+y, hp, maxHp:hp });
+let areaTargets = [areaTarget(130,0),areaTarget(-130,0),areaTarget(0,130),areaTarget(0,-130),areaTarget(280,0)];
+game.setEnemies(areaTargets);
+game.beginCharge(); game.update(.4);
+assert.equal(game.player.areaCool, 0, 'charge does not fire before .8 seconds');
+assert.ok(areaTargets.every(e=>e.hp===20));
+game.draw(.016);
+game.update(.4);
+assert.ok(areaTargets.slice(0,4).every(e=>e.hp===17), 'area skill hits all directions');
+assert.equal(areaTargets[4].hp,20,'distant enemies remain unharmed');
+assert.equal(game.player.stamina,55,'area skill costs 45 stamina');
+assert.equal(game.player.areaCool,5);
+assert.ok(node('areaStatus').textContent.includes('5.0'));
+game.draw(.016);
+const countBefore = game.player.combo;
+game.releaseCharge();
+assert.equal(game.player.combo,countBefore,'release after area skill must not perform melee');
+game.player.areaCool=0;game.player.stamina=100;
+game.beginCharge();game.update(.8);
+assert.equal(game.player.areaCool,5);
+game.player.areaCool=0;game.update(.1);
+assert.equal(game.player.areaCool,0,'continuing to hold never repeats the skill');
+game.cancelCharge();
+game.start();game.setEnemies([areaTarget(50,0)]);
+game.beginCharge();game.releaseCharge();
+assert.equal(game.enemies[0].hp,19,'short click still performs a normal slash');
+assert.equal(game.player.hitStreak,1);
+game.player.cool=0;
+game.beginCharge();game.pause();game.start();
+assert.equal(game.charge.held,false,'pause and resume cancel charge');
+const comboBefore=game.player.combo;
+game.releaseCharge();
+assert.equal(game.player.combo,comboBefore,'releasing cancelled charge does not attack');
+game.player.stamina=44;game.areaAttack();
+assert.equal(game.player.areaCool,0,'area skill rejects insufficient stamina');
+game.player.stamina=100;game.player.areaCool=2;game.areaAttack();
+assert.equal(game.player.stamina,100,'cooldown prevents stamina spending');
+game.player.areaCool=0;game.player.hitStreak=6;
+areaTargets=[areaTarget(100,0,9),areaTarget(-100,0,9)];
+game.setEnemies(areaTargets);game.areaAttack();
+assert.equal(game.enemies.length,0,'empowered area skill deals triple damage');
+assert.equal(game.kills,2,'area kills are counted');
+assert.equal(game.player.hitStreak,6,'area skill preserves melee streak');
+game.beginCharge();game.start();
+assert.equal(game.charge.held,false);
+assert.equal(game.player.areaCool,0,'restart resets area skill');
+console.log('PASS: base gameplay, combos, tougher enemies, ranged attacks; area hold threshold, short click, 360-degree range, damage, knockback rendering, power inheritance, cooldown/stamina, one activation per hold, pause/cancel/restart, kills');
